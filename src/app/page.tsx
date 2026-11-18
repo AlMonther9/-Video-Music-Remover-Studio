@@ -569,16 +569,22 @@ export default function Home() {
                     <div className="rounded-2xl overflow-hidden bg-[#2D231B] border border-[#82624A]/30 aspect-video relative shadow-inner">
                       {activeTab === 'clean' && currentJob.outputVideoUrl && (
                         <video
+                          key={`clean-${currentJob.id}`}
                           src={currentJob.outputVideoUrl}
                           controls
+                          playsInline
+                          preload="metadata"
                           className="w-full h-full object-contain"
                         />
                       )}
 
                       {activeTab === 'original' && currentJob.videoUrl && (
                         <video
+                          key={`original-${currentJob.id}`}
                           src={currentJob.videoUrl}
                           controls
+                          playsInline
+                          preload="metadata"
                           className="w-full h-full object-contain"
                         />
                       )}

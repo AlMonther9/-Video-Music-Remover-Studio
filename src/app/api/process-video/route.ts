@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
 import { createJob, updateJob } from '@/lib/job-store';
-import { extractAudioFromVideo, combineVideoAndAudio } from '@/lib/ffmpeg-helper';
+import { extractAudioFromVideo, combineVideoAndAudio, ensureWebCompatiblePreview } from '@/lib/ffmpeg-helper';
 import { separateStemsWithDemucs } from '@/lib/demucs-helper';
 
 export async function POST(req: NextRequest) {
@@ -106,14 +106,15 @@ async function runProcessingPipeline(
     fs.copyFileSync(primaryStemPath, publicIsolatedAudioPath);
     const isolatedAudioUrl = `/processed/${isolatedAudioFilename}`;
 
-    // Step 3: Video Remuxing
+    // Step 3: Video Remuxing & Web Compatibility
     updateJob(jobId, {
       status: 'remuxing_video',
       progress: 88,
-      stepMessage: 'Merging clean audio stream with original video stream...',
+      stepMessage: 'Merging clean audio stream and preparing web-compatible video...',
     });
 
-    const cleanVideoFilename = `${jobId}_clean${fileExtension}`;
+    // Always output .mp4 container for universal HTML5 browser player support
+    const cleanVideoFilename = `${jobId}_clean.mp4`;
     const outputVideoPath = path.join(processedDir, cleanVideoFilename);
     await combineVideoAndAudio(originalVideoPath, primaryStemPath, outputVideoPath);
     const outputVideoUrl = `/processed/${cleanVideoFilename}`;
@@ -127,6 +128,18 @@ async function runProcessingPipeline(
       isolatedAudioUrl,
       completedAt: Date.now(),
     });
+
+    // Non-blocking: ensure original video preview in Tab 2 is also playable in browser if it was HEVC
+    ensureWebCompatiblePreview(originalVideoPath, path.join(tempDir, 'web_orig.mp4'))
+      .then((converted) => {
+        if (converted) {
+          const tempWeb = path.join(tempDir, 'web_orig.mp4');
+          if (fs.existsSync(tempWeb)) {
+            fs.copyFileSync(tempWeb, originalVideoPath);
+          }
+        }
+      })
+      .catch((err) => console.warn('Original preview conversion notice:', err));
 
     // Cleanup temp files after 5 minutes
     setTimeout(() => {
